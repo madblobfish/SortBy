@@ -1,15 +1,47 @@
 from __future__ import print_function
-import sublime, sublime_plugin, re
 from collections import defaultdict
+import functools
+import re
+import sublime
+import sublime_plugin
 
-bases = {'binary' : 2,'octal' : 8,'decimal' : 10, 'hexadecimal' : 16}
+bases = {'binary' : 2, 'octal' : 8, 'decimal' : 10, 'hexadecimal' : 16}
 
-#Thanks to Ned Batchelder for this function
-#http://nedbatchelder.com/blog/200712/human_sorting.html
-def sort_naturel(liste):
-    convertion = lambda e: int(e) if e.isdigit() else e.lower()
-    key1 = lambda key: [ convertion(g) for g in re.split('([0-9]+)', key) ]
-    return sorted(liste, key = key1)
+################################################################################
+# helpers
+
+def logInputAndOutput(func):
+    '''decorator to help with debugging'''
+    def function_wrapper(*args, **kwargs):
+        print("Before calling " + func.__name__ + ":")
+        for arg in args:
+            print("\t", type(arg), "|", arg)
+        for arg in kwargs:
+            print("\t", type(arg), "|", arg)
+        output = func(*args, **kwargs)
+        print("After calling " + func.__name__ + ":", type(output), "|", output)
+        return output
+    return function_wrapper
+
+def compose(functions):
+    '''apply functions in order from left to right'''
+    return lambda x: functools.reduce(lambda a, f: f(a), functions, x)
+
+################################################################################
+# functions to modify keys
+
+def naturalize(line):
+    '''http://nedbatchelder.com/blog/200712/human_sorting.html'''
+    conversion = lambda e: int(e) if e.isdigit() else e
+    return [conversion(g) for g in re.split('([0-9]+)', line)]
+
+def ignorePatterns(toIgnore, caseSensitive):
+    '''remove a string or regular expression from the line'''
+    def regexFunc(line, pattern):
+        return re.sub(pattern, "", line)
+    return lambda line: functools.reduce(regexFunc, toIgnore, line)
+
+################################################################################
 
 def putEndLines(arr):
     if int(sublime.version()) < 3000:
@@ -40,10 +72,18 @@ class SortingObj(object):
     def getNumber(self):
         if self.number == 0:
             return 0
-        else:
-            return int(self.number, bases[self.base])
+        return int(self.number, bases[self.base])
+
+################################################################################
+# sort command
 
 class SrtbyliCommand(sublime_plugin.TextCommand):
+
+    def __init__(self, cmd):
+        super().__init__(cmd)
+        self.estSelect = None
+        self.edit = None
+        self.settings = sublime.load_settings("SortBy.sublime-settings")
 
     def sortNumbers(self, region, contenue, sort): #Sort numbers with letters
         conteneur = []
@@ -65,70 +105,116 @@ class SrtbyliCommand(sublime_plugin.TextCommand):
             else: #No number found
                 obj.append(SortingObj(line, 0, sort))
 
-        obj.sort(key=lambda x: x.getNumber(), reverse=self.reversed)
+        obj.sort(key=lambda x: x.getNumber())
 
         for line in obj:
             conteneur.append(line.getLine())
 
         writeToView(self, region, conteneur)
 
-    def sortStrings(self, region, contenue, sort): #Sort strings and natural order
-        if sort == 'length':
-            if self.settings.get('length_alphabetically_enabled'):
-                conteneur = defaultdict(list)
+    def sortStrings(self, region, contenue, sort):
+        '''sort alphabetically or naturally'''
 
-                #Put all values in a defaultdict (Grouped by length)
-                for str in sorted(contenue, key=lambda str: len(str)) :
-                    conteneur[len(str)].append(str)
+        keyFuncs = []
+        caseSensitive = self.settings.get('alphabetical_case_sensitive', False)
+        toIgnore = self.settings.get('alphabetical_ignore_patterns', [])
 
-                #Sort the groups alphabetically 
-                for k, v in conteneur.items():
-                    conteneur[k] = sorted(v, reverse=self.settings.get('length_alphabetically_reversed'))
+        if not caseSensitive:
+            keyFuncs.append(str.lower)
+            toIgnore = [pattern.lower() for pattern in toIgnore]
 
-                #Sort the groups by length
-                conteneur = sorted(conteneur.items(), key=lambda t: t[0], reverse=self.reversed)
+        if toIgnore:
+            keyFuncs.append(ignorePatterns(toIgnore, caseSensitive))
 
-                conteneurTmp = []
-                for k, v in conteneur:
-                    for str in v:
-                        conteneurTmp.append(str)
-                conteneur = conteneurTmp;
+        if sort == 'naturalOrder':
+            keyFuncs.append(naturalize)
 
-            else:
-                conteneur = sorted(contenue, key=lambda str: len(str), reverse=self.reversed)
-
-        elif sort == 'string':
-            if self.settings.get('case_sensitive'):
-                conteneur = sorted(contenue, reverse=self.reversed)
-            else:
-                conteneur = sorted(contenue, key=lambda str: str.lower(), reverse=self.reversed)
-
-        elif sort == 'naturalOrder':
-            conteneur = sort_naturel(contenue)
+        keyFunc = compose(keyFuncs)
+        conteneur = sorted(contenue, key=keyFunc, reverse=self.settings.get("descending"))
 
         writeToView(self, region, conteneur)
 
-    def run(self, edit, sort = 'length', reversed=False):
-        lines = []
-        self.edit = edit
+    def sortLength(self, region, contenue, sort):
+        '''sort by string length'''
+        if self.settings.get('length_alphabetically_enabled'):
+            conteneur = defaultdict(list)
+
+            #Put all values in a defaultdict (Grouped by length)
+            for string in sorted(contenue, key=len):
+                conteneur[len(string)].append(string)
+
+            #Sort the groups alphabetically
+            for k, v in conteneur.items():
+                conteneur[k] = sorted(v, reverse=self.settings.get("descending"))
+
+            #Sort the groups by length
+            conteneur = sorted(conteneur.items(), key=lambda t: t[0], reverse=self.settings.get("descending"))
+
+            conteneurTmp = []
+            for k, v in conteneur:
+                for string in v:
+                    conteneurTmp.append(string)
+            conteneur = conteneurTmp
+        else:
+            conteneur = sorted(contenue, key=len, reverse=self.settings.get("descending"))
+
+        writeToView(self, region, conteneur)
+
+    def chooseSortMethod(self, region, lines, sort):
+        if sort == 'string' or sort == 'naturalOrder':
+            self.sortStrings(region, lines, sort)
+        elif sort == 'decimal' or sort == 'octal' or sort == 'hexadecimal' or sort == 'binary':
+            self.sortNumbers(region, lines, sort)
+        elif sort == 'length':
+            self.sortLength(region, lines, sort)
+
+    def run(self, edit, sort='string'):
         view = self.view
-        self.reversed = reversed
-        SrtbyliCommand.edit = edit
+        self.edit = edit
         self.settings = sublime.load_settings("SortBy.sublime-settings")
 
         if view.sel()[0].empty() and len(view.sel()) == 1: #No selection
             self.estSelect = False
-            if sort == 'length' or sort == 'string' or sort == 'naturalOrder':
-                self.sortStrings(view.sel()[-1].end(), [x for x in view.substr(sublime.Region(0, self.view.size())).splitlines() if x != ''], sort)
-            elif sort == 'decimal' or sort == 'octal' or sort == 'hexadecimal' or sort == 'binary':
-                self.sortNumbers(view.sel()[-1].end(), [x for x in view.substr(sublime.Region(0, self.view.size())).splitlines() if x != ''], sort)
+            region = view.sel()[-1].end()
+            lines = [x for x in view.substr(sublime.Region(0, self.view.size())).splitlines() if x != '']
+            self.chooseSortMethod(region, lines, sort)
         else:
             self.estSelect = True
             for region in view.sel():
                 if region.empty():
                     continue
                 else:
-                    if sort == 'length' or sort == 'string' or sort == 'naturalOrder':
-                        self.sortStrings(region, [x for x in view.substr(region).splitlines() if x != ''], sort)
-                    elif sort == 'decimal' or sort == 'octal' or sort == 'hexadecimal' or sort == 'binary':
-                        self.sortNumbers(region, [x for x in view.substr(region).splitlines() if x != ''], sort)
+                    lines = [x for x in view.substr(region).splitlines() if x != '']
+                    self.chooseSortMethod(region, lines, sort)
+
+################################################################################
+# options checkboxes
+
+class OptionBase(sublime_plugin.TextCommand):
+    def __init__(self, cmd):
+        super().__init__(cmd)
+        self.option = ""
+
+    def is_checked(self):
+        settings = sublime.load_settings("SortBy.sublime-settings")
+        return settings.get(self.option)
+
+    def run(self, edit):
+        settings = sublime.load_settings("SortBy.sublime-settings")
+        settings.set(self.option, not settings.get(self.option, False))
+        sublime.save_settings("SortBy.sublime-settings")
+
+class OptionsDescendingCommand(OptionBase):
+    def __init__(self, cmd):
+        super().__init__(cmd)
+        self.option = "descending"
+
+class OptionsCaseSensitiveCommand(OptionBase):
+    def __init__(self, cmd):
+        super().__init__(cmd)
+        self.option = "alphabetical_case_sensitive"
+
+class OptionsLengthAlphaCommand(OptionBase):
+    def __init__(self, cmd):
+        super().__init__(cmd)
+        self.option = "length_alphabetical_enabled"

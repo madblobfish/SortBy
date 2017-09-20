@@ -1,5 +1,9 @@
 {
 	"alphabetical_case_sensitive": false,
-	"length_alphabetically_enabled": false,
-	"length_alphabetically_reversed": false
+	"alphabetical_ignore_patterns":
+	[
+		"((^The)\\s)"
+	],
+	"descending": false,
+	"length_alphabetical_enabled": false
 }

@@ -1,0 +1,87 @@
+[
+    {
+        "caption": "SortBy",
+        "mnemonic": "o",
+        "id": "sort_by",
+        "children":
+        [
+            {
+                "caption": "Alpha",
+                "mnemonic": "A",
+                "command": "srtbyli",
+                "args": {"sort": "string"}
+            },
+            {
+                "caption": "Alpha – Natural",
+                "mnemonic": "N",
+                "command": "srtbyli",
+                "args": {"sort": "naturalOrder"}
+            },
+            {
+                "caption": "Number – Binary",
+                "mnemonic": "B",
+                "command": "srtbyli",
+                "args": {"sort": "binary"}
+            },
+            {
+                "caption": "Number – Hexadecimal",
+                "mnemonic": "H",
+                "command": "srtbyli",
+                "args": {"sort": "hexadecimal"}
+            },
+            {
+                "caption": "Number – Integer",
+                "mnemonic": "I",
+                "command": "srtbyli",
+                "args": {"sort": "decimal"}
+            },
+            {
+                "caption": "Number – Octal",
+                "mnemonic": "O",
+                "command": "srtbyli",
+                "args": {"sort": "octal"}
+            },
+            {
+                "caption": "Length of Lines",
+                "mnemonic": "L",
+                "command": "srtbyli",
+                "args": {"sort": "length"},
+            },
+
+            {"caption": "-"},
+
+            {
+                "caption": "Descending Order",
+                "command": "options_descending",
+                "checkbox": true,
+            },
+            {
+                "caption": "Alpha – Case Sensitive",
+                "command": "options_case_sensitive",
+                "checkbox": true,
+            },
+            {
+                "caption": "Length – Alphabetize",
+                "command": "options_length_alpha",
+                "checkbox": true,
+            },
+
+            {"caption": "-"},
+
+            {
+                "caption": "Settings – Default",
+                "command": "open_file", "args":
+                {
+                    "file": "${packages}/SortBy/SortBy.sublime-settings"
+                }
+            },
+            {
+                "caption": "Settings – User",
+                "command": "open_file", "args":
+                {
+                    "file": "${packages}/User/SortBy.sublime-settings"
+                }
+            },
+        ]
+    }
+]
