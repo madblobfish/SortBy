@@ -1,7 +1,7 @@
 # SortBy
 *A Sublime Text plugin that allows you to sort lines with methods that are not present by default.*
 - - -
-​
+
 ## Sorting methods available:
 - Natural order
 - Sort by the length of lines (Ascending / Descending)
@@ -32,4 +32,3 @@ Or using the control palette
 <br><kbd>CTRL</kbd> + <kbd>SHIFT</kbd> + <kbd>P</kbd> on *Windows/Linux*.
 <br><kbd>COMMAND</kbd> + <kbd>SHIFT</kbd> + <kbd>P</kbd> on *OS X*.
 <br>and type SortBy in the box.
-​
